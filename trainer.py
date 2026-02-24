@@ -32,19 +32,33 @@ class TransformerTrainer:
         self.tokenizer = tokenizer
 
     def get_log_probs(
-        self, logits: Float[Tensor, "batch posn d_vocab"], tokens: Int[Tensor, "batch posn"]
+        self,
+        logits: Float[Tensor, "batch posn d_vocab"],
+        tokens: Int[Tensor, "batch posn"],
+        loss_mask: Int[Tensor, "batch posn-1"] | None = None,
     ) -> Float[Tensor, "batch posn-1"]:
         log_probs = logits.log_softmax(dim=-1)
-        # Get logprobs the first seq_len-1 predictions (so we can compare them with the actual next tokens)
         log_probs_for_tokens = (
             log_probs[:, :-1].gather(dim=-1, index=tokens[:, 1:].unsqueeze(-1)).squeeze(-1)
         )
+        if loss_mask is not None:
+            log_probs_for_tokens = log_probs_for_tokens * loss_mask
         return log_probs_for_tokens
 
-    def training_step(self, batch: dict[str, Int[Tensor, "batch seq"]]) -> Float[Tensor, ""]:
+    def training_step(
+        self,
+        batch: dict[str, Int[Tensor, "batch seq"]],
+        loss_mask: Int[Tensor, "batch seq-1"] | None = None,
+    ) -> Float[Tensor, ""]:
         tokens = batch["tokens"].to(device)
+        if loss_mask is not None:
+            loss_mask = loss_mask.to(device)
         logits = self.model(tokens)
-        loss = -self.get_log_probs(logits, tokens).mean()
+        log_probs = self.get_log_probs(logits, tokens, loss_mask)
+        if loss_mask is not None:
+            loss = -log_probs.sum() / loss_mask.sum().clamp(min=1)
+        else:
+            loss = -log_probs.mean()
         loss.backward()
         self.optimizer.step()
         self.optimizer.zero_grad()
@@ -65,7 +79,26 @@ class TransformerTrainer:
         self.model.train()
         return accuracy
 
-    def train(self):
+    @t.inference_mode()
+    def evaluate_sudoku_accuracy(self) -> float:
+        """Exact accuracy: fraction of puzzles where all 81 answer digits are correct."""
+        self.model.eval()
+        exact_correct, total = 0, 0
+        # Answer tokens are at positions 82-162 (0-indexed: 81-161)
+        answer_start, answer_end = 81, 162
+        for batch in tqdm(self.test_loader, desc="Evaluating (sudoku exact)"):
+            tokens = batch["tokens"].to(device)
+            logits: Tensor = self.model(tokens)[:, answer_start - 1 : answer_end - 1]
+            predicted = logits.argmax(dim=-1)
+            targets = tokens[:, answer_start:answer_end]
+            for b in range(tokens.size(0)):
+                if (predicted[b] == targets[b]).all():
+                    exact_correct += 1
+                total += 1
+        self.model.train()
+        return exact_correct / total if total > 0 else 0.0
+
+    def train(self, sudoku_mode: bool = False):
         import numpy as np
 
         accuracy = np.nan
@@ -73,18 +106,37 @@ class TransformerTrainer:
 
         for epoch in range(self.args.epochs):
             for i, batch in enumerate(self.train_loader):
-                loss = self.training_step(batch)
+                loss_mask = None
+                if sudoku_mode:
+                    # Mask loss to only answer tokens (positions 82-162)
+                    tokens = batch["tokens"]
+                    seq_len = tokens.size(1)
+                    loss_mask = t.zeros(
+                        seq_len - 1, dtype=tokens.dtype, device=device
+                    )
+                    loss_mask[80:161] = 1  # Answer positions
+                    loss_mask = loss_mask.unsqueeze(0).expand(tokens.size(0), -1)
+                loss = self.training_step(batch, loss_mask)
                 progress_bar.update()
                 progress_bar.set_description(
                     f"Epoch {epoch}, loss: {loss:.3f}, accuracy: {accuracy:.3f}"
                 )
                 if i >= self.args.max_steps_per_epoch:
                     break
-            accuracy = self.evaluate()
-            sample_text = self.sampler.sample("Once upon a time", max_tokens_generated=50)
+            if sudoku_mode:
+                accuracy = self.evaluate_sudoku_accuracy()
+                sample_puzzle = "5...27..9..41......1..5.3...92.6.8...5......66..7..29.8...7...2.......8...9..36.."
+                sample_text = self.sampler.sample(
+                    sample_puzzle + "|",
+                    max_tokens_generated=81,
+                    temperature=0,
+                )
+            else:
+                accuracy = self.evaluate()
+                sample_text = self.sampler.sample("Once upon a time", max_tokens_generated=50)
             print(sample_text)
 
-    def save_model(self, filepath: str):
+    def save_model(self, filepath: str, tokenizer_config: dict | None = None):
         """Save model checkpoint including model state, optimizer state, and training progress."""
         checkpoint = {
             "model_state_dict": self.model.state_dict(),
@@ -100,6 +152,8 @@ class TransformerTrainer:
                 "d_vocab": self.model.cfg.d_vocab,
             },
         }
+        if tokenizer_config is not None:
+            checkpoint["tokenizer_config"] = tokenizer_config
         t.save(checkpoint, filepath)
         print(f"Model saved to {filepath}")
 

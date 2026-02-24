@@ -3,18 +3,32 @@ import torch as t
 import numpy as np
 from torch import Tensor
 from jaxtyping import Float, Int
-from transformers.models.gpt2.tokenization_gpt2_fast import GPT2TokenizerFast
 
 from config import device
 from transformer import DemoTransformer
 
 
 class TransformerSampler:
-    """Handles text generation sampling from the DemoTransformer."""
-    def __init__(self, model: DemoTransformer, tokenizer: GPT2TokenizerFast):
+    """Handles text generation sampling from the DemoTransformer.
+
+    Accepts any tokenizer with encode(text, return_tensors="pt") and decode(ids).
+    """
+
+    def __init__(self, model: DemoTransformer, tokenizer):
         self.model = model
         self.cfg = model.cfg
         self.tokenizer = tokenizer
+
+    def _encode_prompt(self, prompt: str) -> Tensor:
+        """Encode prompt to 1D tensor of token IDs."""
+        encoded = self.tokenizer.encode(prompt, return_tensors="pt")
+        if isinstance(encoded, list):
+            encoded = t.tensor(encoded, dtype=t.long, device=device)
+        else:
+            encoded = encoded.to(device)
+        if encoded.dim() == 2:
+            return encoded[0]
+        return encoded
 
     @t.inference_mode()
     def sample(self, prompt: str, max_tokens_generated=100, verbose=False, **kwargs) -> str:
@@ -25,7 +39,7 @@ class TransformerSampler:
         kwargs are passed to sample_next_token, to give detailed instructions on how new tokens are chosen.
         """
         self.model.eval()
-        input_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(device)[0]
+        input_ids = self._encode_prompt(prompt)
 
         for i in range(max_tokens_generated):
             # Get new logits (make sure we don't pass in more tokens than the model's context length)

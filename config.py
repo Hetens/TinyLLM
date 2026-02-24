@@ -20,11 +20,28 @@ class Config:
     n_layers: int = 12
     n_heads: int = 12
 
+    @classmethod
+    def sudoku_7m(cls) -> "Config":
+        """Config for ~7M parameter sudoku Q&A model (d_vocab=11)."""
+        d_model = 288
+        n_heads = 8
+        d_head = d_model // n_heads
+        return cls(
+            d_model=d_model,
+            n_heads=n_heads,
+            d_head=d_head,
+            d_mlp=4 * d_model,
+            n_layers=7,
+            n_ctx=256,
+            d_vocab=11,
+            debug=False,
+        )
+
 
 @dataclass
 class TransformerTrainingArgs:
     """Training configuration."""
-    batch_size: int = 16
+    batch_size: int = 4
     epochs: int = 10
     max_steps_per_epoch: int = 500
     lr: float = 1e-3

@@ -1,4 +1,8 @@
-"""Attention mechanism for the DemoTransformer."""
+"""Attention mechanism for the DemoTransformer.
+
+TODO: K-V Cache - cache key/value tensors across generation steps to avoid
+recomputing attention for previous tokens. Would touch this file and sampler.py.
+"""
 import torch as t
 import torch.nn as nn
 import einops
