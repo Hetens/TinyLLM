@@ -52,10 +52,10 @@ def main():
     # compute per step without proportional throughput gain on a small GPU.
     args = TransformerTrainingArgs(
         batch_size=8,
-        epochs=10,
+        epochs=20,
         max_steps_per_epoch=2000,
-        lr=1e-3,
-        weight_decay=1e-2,
+        lr=3e-4,
+        weight_decay=0.01,
         wandb_project="sudoku-qna",
     )
 

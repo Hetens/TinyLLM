@@ -129,7 +129,8 @@ class TransformerTrainer:
                     break
             if sudoku_mode:
                 accuracy = self.evaluate_sudoku_accuracy()
-                sample_puzzle = ".3...........917.....7.3.1..5.1.693......76..6..93...8...2.5..........81.75..932."
+                sample_puzzle = ".358.47.2.....71...4.....9.......3...........8..53.....5.4...1..9..2...31.2.7.4.8"
+                #935814762286957134741263895519642387623798541874531926357486219498125673162379458
                 sample_text = self.sampler.sample(
                     sample_puzzle + "|",
                     max_tokens_generated=81,
