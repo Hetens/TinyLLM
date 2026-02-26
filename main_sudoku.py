@@ -34,6 +34,12 @@ def main():
     print(f"Using device: {device}")
     if device == "cuda":
         print(f"CUDA capability: {t.cuda.get_device_capability()}")
+        # Enable TF32 for matmuls on Ampere+ GPUs (gives ~2x speedup with minimal precision loss).
+        # On your GTX 1050 (Pascal) this is a no-op but doesn't hurt.
+        t.backends.cuda.matmul.allow_tf32 = True
+        t.backends.cudnn.allow_tf32 = True
+        # Enable cuDNN benchmark to auto-tune convolutions (helps with fixed-size inputs)
+        t.backends.cudnn.benchmark = True
 
     tokenizer = SudokuTokenizer()
 
@@ -42,6 +48,8 @@ def main():
     n_params = sum(p.numel() for p in model.parameters())
     print(f"Created DemoTransformer with {n_params / 1e6:.2f}M parameters")
 
+    # Batch size 8 is better for your GTX 1050 - higher batch sizes increase
+    # compute per step without proportional throughput gain on a small GPU.
     args = TransformerTrainingArgs(
         batch_size=8,
         epochs=10,
@@ -64,6 +72,7 @@ def main():
         shuffle=True,
         num_workers=4,
         pin_memory=True,
+        persistent_workers=True,  # Keep workers alive between epochs
     )
     test_loader = DataLoader(
         test_dataset,
@@ -71,6 +80,7 @@ def main():
         shuffle=False,
         num_workers=4,
         pin_memory=True,
+        persistent_workers=True,
     )
 
     print("Starting training...")

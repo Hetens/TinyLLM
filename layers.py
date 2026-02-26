@@ -40,12 +40,13 @@ class PosEmbed(nn.Module):
     def __init__(self, cfg: Config):
         super().__init__()
         self.cfg = cfg
-        self.W_pos = nn.Parameter(t.empty(cfg.d_model, cfg.n_ctx))
+        self.W_pos = nn.Parameter(t.empty(cfg.n_ctx, cfg.d_model))
         nn.init.normal_(self.W_pos, std=cfg.init_range)
 
-    def forward(self, tokens: Int[Tensor, "batch posn"]) -> Float[Tensor, "batch posn d_model"]:
+    def forward(self, tokens: Int[Tensor, "batch posn"], offset: int = 0) -> Float[Tensor, "batch posn d_model"]:
         batch, seq_len = tokens.shape
-        return einops.repeat(self.W_pos[:seq_len], "seq_len d_model -> batch seq_len d_model", batch=batch)
+        # Original code: return einops.repeat(self.W_pos[:seq_len], "seq_len d_model -> batch seq_len d_model", batch=batch)
+        return einops.repeat(self.W_pos[offset : offset + seq_len], "seq_len d_model -> batch seq_len d_model", batch=batch)
 
 
 class Unembed(nn.Module):

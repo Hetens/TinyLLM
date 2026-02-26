@@ -12,6 +12,7 @@ class TransformerSampler:
     """Handles text generation sampling from the DemoTransformer.
 
     Accepts any tokenizer with encode(text, return_tensors="pt") and decode(ids).
+    Uses KV cache for fast autoregressive generation.
     """
 
     def __init__(self, model: DemoTransformer, tokenizer):
@@ -35,25 +36,50 @@ class TransformerSampler:
         """
         Returns a string of autoregressively generated text, starting from the prompt.
 
-        Sampling terminates at max_tokens_generated, or when the model generates an end-of-sequence token.
-        kwargs are passed to sample_next_token, to give detailed instructions on how new tokens are chosen.
+        Uses KV cache: the prompt is processed in one forward pass, then each
+        subsequent token only requires a single-token forward pass.
+
+        Sampling terminates at max_tokens_generated, or when the model generates
+        an end-of-sequence token.
+        kwargs are passed to sample_next_token.
         """
         self.model.eval()
         input_ids = self._encode_prompt(prompt)
 
-        for i in range(max_tokens_generated):
-            # Get new logits (make sure we don't pass in more tokens than the model's context length)
-            logits = self.model(input_ids[None, -self.cfg.n_ctx :])
-            # We only take logits for the last token, because this is what we're sampling
+        # Prefill: process entire prompt and populate KV caches
+        kv_caches = self.model.create_kv_caches()
+        prompt_tokens = input_ids[None, -self.cfg.n_ctx :]  # (1, prompt_len)
+        logits = self.model(prompt_tokens, kv_caches=kv_caches, cache_position=prompt_tokens.size(1))
+        # Only need logits for the last token
+        logits = logits[0, -1]
+        next_token = t.tensor(
+            [TransformerSampler.sample_next_token(input_ids, logits, **kwargs)],
+            device=device,
+        )
+        input_ids = t.cat([input_ids, next_token], dim=-1)
+
+        if verbose:
+            print(self.tokenizer.decode(input_ids), end="\r")
+        if next_token == getattr(self.tokenizer, "eos_token_id", None):
+            return self.tokenizer.decode(input_ids)
+
+        # Decode: generate one token at a time using KV cache
+        for i in range(1, max_tokens_generated):
+            # Only feed the last token; KV cache has the rest
+            logits = self.model(
+                next_token[None],  # (1, 1)
+                kv_caches=kv_caches,
+                cache_position=input_ids.size(0),
+            )
             logits = logits[0, -1]
-            # Get next token (as a tensor of size (1, 1) so we can concat it to input_ids)
-            next_token = t.tensor([TransformerSampler.sample_next_token(input_ids, logits, **kwargs)], device=device)
-            # Create new input ids string, with shape (1, old_seq_len + 1)
+            next_token = t.tensor(
+                [TransformerSampler.sample_next_token(input_ids, logits, **kwargs)],
+                device=device,
+            )
             input_ids = t.cat([input_ids, next_token], dim=-1)
-            # Print out results, if required
+
             if verbose:
                 print(self.tokenizer.decode(input_ids), end="\r")
-            # If our new token was the end-of-text token, stop
             if next_token == getattr(self.tokenizer, "eos_token_id", None):
                 break
 

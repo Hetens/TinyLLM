@@ -31,6 +31,17 @@ class TransformerTrainer:
         self.test_loader = test_loader
         self.tokenizer = tokenizer
 
+        # Pre-compute & pin the static sudoku loss mask so we don't rebuild it every step
+        self._sudoku_loss_mask: Tensor | None = None
+
+    def _get_sudoku_loss_mask(self, batch_size: int, seq_len: int) -> Tensor:
+        """Return the cached sudoku answer-only loss mask, creating it on first call."""
+        if self._sudoku_loss_mask is None or self._sudoku_loss_mask.size(0) != batch_size:
+            mask = t.zeros(seq_len - 1, dtype=t.float32, device=device)
+            mask[81:162] = 1  # Answer positions (predicting tokens 82-162)
+            self._sudoku_loss_mask = mask.unsqueeze(0).expand(batch_size, -1).contiguous()
+        return self._sudoku_loss_mask
+
     def get_log_probs(
         self,
         logits: Float[Tensor, "batch posn d_vocab"],
@@ -50,9 +61,9 @@ class TransformerTrainer:
         batch: dict[str, Int[Tensor, "batch seq"]],
         loss_mask: Int[Tensor, "batch seq-1"] | None = None,
     ) -> Float[Tensor, ""]:
-        tokens = batch["tokens"].to(device)
+        tokens = batch["tokens"].to(device, non_blocking=True)
         if loss_mask is not None:
-            loss_mask = loss_mask.to(device)
+            loss_mask = loss_mask.to(device, non_blocking=True)
         logits = self.model(tokens)
         log_probs = self.get_log_probs(logits, tokens, loss_mask)
         if loss_mask is not None:
@@ -61,7 +72,7 @@ class TransformerTrainer:
             loss = -log_probs.mean()
         loss.backward()
         self.optimizer.step()
-        self.optimizer.zero_grad()
+        self.optimizer.zero_grad(set_to_none=True)
         self.step += 1
         return loss
 
@@ -70,7 +81,7 @@ class TransformerTrainer:
         self.model.eval()
         totally_correct, total_samples = 0, 0
         for batch in tqdm(self.test_loader, desc="Evaluating"):
-            tokens = batch["tokens"].to(device)
+            tokens = batch["tokens"].to(device, non_blocking=True)
             logits: Tensor = self.model(tokens)[:, :-1]
             predicted_tokens = logits.argmax(dim=-1)
             totally_correct += (predicted_tokens == tokens[:, 1:]).sum().item()
@@ -84,17 +95,16 @@ class TransformerTrainer:
         """Exact accuracy: fraction of puzzles where all 81 answer digits are correct."""
         self.model.eval()
         exact_correct, total = 0, 0
-        # Answer tokens are at positions 82-162 (0-indexed: 81-161)
-        answer_start, answer_end = 81, 162
+        # Answer tokens are at positions 82-162 (0-indexed)
+        answer_start, answer_end = 82, 163
         for batch in tqdm(self.test_loader, desc="Evaluating (sudoku exact)"):
-            tokens = batch["tokens"].to(device)
+            tokens = batch["tokens"].to(device, non_blocking=True)
             logits: Tensor = self.model(tokens)[:, answer_start - 1 : answer_end - 1]
             predicted = logits.argmax(dim=-1)
             targets = tokens[:, answer_start:answer_end]
-            for b in range(tokens.size(0)):
-                if (predicted[b] == targets[b]).all():
-                    exact_correct += 1
-                total += 1
+            # Vectorized: check all 81 answer digits match per puzzle
+            exact_correct += (predicted == targets).all(dim=1).sum().item()
+            total += tokens.size(0)
         self.model.train()
         return exact_correct / total if total > 0 else 0.0
 
@@ -108,14 +118,8 @@ class TransformerTrainer:
             for i, batch in enumerate(self.train_loader):
                 loss_mask = None
                 if sudoku_mode:
-                    # Mask loss to only answer tokens (positions 82-162)
                     tokens = batch["tokens"]
-                    seq_len = tokens.size(1)
-                    loss_mask = t.zeros(
-                        seq_len - 1, dtype=tokens.dtype, device=device
-                    )
-                    loss_mask[80:161] = 1  # Answer positions
-                    loss_mask = loss_mask.unsqueeze(0).expand(tokens.size(0), -1)
+                    loss_mask = self._get_sudoku_loss_mask(tokens.size(0), tokens.size(1))
                 loss = self.training_step(batch, loss_mask)
                 progress_bar.update()
                 progress_bar.set_description(
@@ -125,7 +129,7 @@ class TransformerTrainer:
                     break
             if sudoku_mode:
                 accuracy = self.evaluate_sudoku_accuracy()
-                sample_puzzle = "5...27..9..41......1..5.3...92.6.8...5......66..7..29.8...7...2.......8...9..36.."
+                sample_puzzle = ".3...........917.....7.3.1..5.1.693......76..6..93...8...2.5..........81.75..932."
                 sample_text = self.sampler.sample(
                     sample_puzzle + "|",
                     max_tokens_generated=81,
