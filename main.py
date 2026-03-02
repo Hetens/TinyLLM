@@ -4,10 +4,10 @@ import datasets
 from torch.utils.data import DataLoader
 from transformer_lens import HookedTransformer
 from transformer_lens.utils import tokenize_and_concatenate
-from config import Config, TransformerTrainingArgs, device
-from transformer import DemoTransformer
-from trainer import TransformerTrainer
-from sampler import TransformerSampler
+from core.config import Config, TransformerTrainingArgs, device
+from core.transformer import DemoTransformer
+from core.trainer import TransformerTrainer
+from core.sampler import TransformerSampler
 
 
 def main():
@@ -167,7 +167,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) > 1 and sys.argv[1] == "--inference":
         # Run inference only from a saved checkpoint
-        checkpoint = sys.argv[2] if len(sys.argv) > 2 else "model_checkpoint.pt"
+        checkpoint = sys.argv[2] if len(sys.argv) > 2 else "./saved_models/model_checkpoint.pt"
         load_and_run_inference(checkpoint)
     else:
         # Full training
