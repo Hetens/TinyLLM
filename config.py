@@ -25,12 +25,12 @@ class Config:
         """Config for ~7M parameter sudoku Q&A model (d_vocab=11)."""
         d_model = 288
         n_heads = 8
-        d_head = d_model // n_heads
+        d_head = d_model // n_heads # 36
         return cls(
             d_model=d_model,
             n_heads=n_heads,
             d_head=d_head,
-            d_mlp=4 * d_model,
+            d_mlp=4 * d_model, # 1152
             n_layers=7,
             n_ctx=256,
             d_vocab=11,
