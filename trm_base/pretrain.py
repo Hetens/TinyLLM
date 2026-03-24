@@ -462,7 +462,7 @@ def evaluate(
             
             for collection in (batch, preds):
                 for k, v in collection.items():
-                    if k in config.eval.save_outputs:
+                    if k in config.eval_save_outputs:
                         save_preds[k].setdefault(k, [])
                         save_preds[k].append(v.cpu())
             

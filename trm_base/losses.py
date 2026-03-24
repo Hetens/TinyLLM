@@ -19,7 +19,7 @@ def stablemax_cross_entropy(logits: torch.Tensor, labels: torch.Tensor, ignore_i
     if valid_mask is None:
         valid_mask =(labels != ignore_index)
 
-    transformed_labels = torch.where(valid_mask,labels, 0)
+    transformed_labels = torch.where(valid_mask,labels, 0).to(torch.int64)
     prediction_logprobs = torch.gather(log_probs, dim=-1, index=transformed_labels.unsqueeze(-1)).squeeze(-1)
 
     return -torch.where(valid_mask, prediction_logprobs, 0)

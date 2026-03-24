@@ -6,3 +6,4 @@ commands_to_manage.txt
 data
 wandb
 checkpoints
+.env
