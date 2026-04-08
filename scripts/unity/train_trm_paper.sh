@@ -9,9 +9,9 @@
 #     sbatch scripts/unity/train_trm_paper.sh
 # ============================================================================
 
-#SBATCH --job-name=tinyllm-paper
+#SBATCH --job-name=TRM-Replication
 #SBATCH --partition=gpu-preempt
-#SBATCH --time=02:00:00
+#SBATCH --time=20:00:00
 #SBATCH --mem=48G
 #SBATCH --cpus-per-task=8
 #SBATCH --gpus=1

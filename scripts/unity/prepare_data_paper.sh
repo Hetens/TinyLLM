@@ -7,7 +7,7 @@
 #     sbatch scripts/unity/prepare_data_paper.sh
 # ============================================================================
 
-#SBATCH --job-name=tinyllm-data-paper
+#SBATCH --job-name=TRM-Replication
 #SBATCH --partition=cpu-preempt
 #SBATCH --time=01:00:00
 #SBATCH --mem=16G
