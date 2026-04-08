@@ -30,9 +30,7 @@ and clone on Unity:
 ```bash
 # On Unity login node
 cd ~
-git clone https://github.com/<your-org>/TinyLLM.git
-cd TinyLLM
-git checkout Experimental-TRM      # or whichever branch has the TRM code
+git clone https://github.com/Hetens/LatentReasoningDecoding.git   # or whichever branch has the TRM code
 ```
 
 Or use `scp` / `rsync` / `sftp` to copy the repo folder directly.

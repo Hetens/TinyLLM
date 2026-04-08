@@ -35,7 +35,7 @@ source "$HOME/venvs/tinyllm/bin/activate"
 
 # ---- Run the dataset builder ----
 cd "$REPO_DIR"
-export PYTHONPATH="$REPO_DIR/trm_base:$PYTHONPATH"
+export PYTHONPATH="$REPO_DIR/trm_base${PYTHONPATH:+:$PYTHONPATH}"
 
 echo ">>> Building Sudoku dataset …"
 python trm_base/build_sdku_data.py
