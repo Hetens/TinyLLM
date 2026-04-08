@@ -13,10 +13,10 @@
 #SBATCH --job-name=tinyllm-train
 #SBATCH --partition=gpu-preempt
 #SBATCH --time=02:00:00
-#SBATCH --mem=48G
+#SBATCH --mem=16G
 #SBATCH --cpus-per-task=8
 #SBATCH --gpus=1
-#SBATCH --constraint=v100
+#SBATCH --constraint=a100
 #SBATCH --output=logs/train_trm_%j.out
 #SBATCH --error=logs/train_trm_%j.err
 
