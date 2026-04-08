@@ -2,16 +2,16 @@
 # ============================================================================
 # train_trm_paper.sh — Train TRM with paper hyperparams on 1x L40S.
 #
-# Paper says ~18-20 hours total.  gpu-preempt has a 2-hour limit, so this
-# job will get killed and you resubmit to resume from the last checkpoint.
+# Paper says ~18-20 hours total.  Uses the gpu partition (up to 48h, non-preemptible)
+# so it can finish in one run without resubmitting.
 #
 # Submit from repo root:
 #     sbatch scripts/unity/train_trm_paper.sh
 # ============================================================================
 
 #SBATCH --job-name=TRM-Replication
-#SBATCH --partition=gpu-preempt
-#SBATCH --time=20:00:00
+#SBATCH --partition=gpu
+#SBATCH --time=24:00:00
 #SBATCH --mem=48G
 #SBATCH --cpus-per-task=8
 #SBATCH --gpus=1
